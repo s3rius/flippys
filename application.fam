@@ -1,8 +1,8 @@
 App(
-    appid="flippys",
-    name="Flippys",
+    appid="btcon",
+    name="Btcon",
     apptype=FlipperAppType.EXTERNAL,
-    entry_point="flippys",
+    entry_point="btcon",
     stack_size=2 * 1024,
     fap_libs=["ble_profile"],
     fap_description="Flipper controller for my pc.",

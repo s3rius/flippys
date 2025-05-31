@@ -1,5 +1,5 @@
 #pragma once
 
 typedef enum {
-    FlippysMainMenuView,
+    BtconMainMenuView,
 } HidView;

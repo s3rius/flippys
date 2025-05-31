@@ -14,11 +14,11 @@
 #include <notification/notification.h>
 
 #include "consts.h"
-#include <flippys_icons.h>
+#include <btcon_icons.h>
 
-typedef struct FlippysApp FlippysApp;
+typedef struct BtconApp BtconApp;
 
-struct FlippysApp {
+struct BtconApp {
     Gui* gui;
     Bt* bt;
     FuriHalBleProfileBase* hid_profile;

@@ -1,2 +1,2 @@
-#define APP_NAME     "flippys"
-#define BT_KEYS_PATH ".flippys.keys"
+#define APP_NAME     "btcon"
+#define BT_KEYS_PATH ".btcon.keys"
