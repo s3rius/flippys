@@ -1,7 +1,5 @@
 dist/*
 .vscode
-.clang-format
-.clangd
 .cache
 .editorconfig
 .env
