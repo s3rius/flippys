@@ -17,7 +17,7 @@ void menu_calllback(void* context, uint32_t index) {
         FURI_LOG_I(APP_NAME, "Starting memes");
         break;
     default:
-        FURI_LOG_E(APP_NAME, "Unknown menu item selected: %lu", index);
+        FURI_LOG_E(APP_NAME, "Unknown menu item selected: %i", index);
     }
     scene_manager_handle_back_event(app->scene_manager);
 }
