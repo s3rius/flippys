@@ -1,0 +1,9 @@
+dist/*
+.vscode
+.clang-format
+.clangd
+.cache
+.editorconfig
+.env
+.ufbt
+compile_commands.json
