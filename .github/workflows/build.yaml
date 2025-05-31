@@ -27,5 +27,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           # See ufbt action docs for other output variables
-          name: ${{ github.event.repository.name }}-${{ steps.build-app.outputs.suffix }}
+          name: ${{ matrix.project }}-${{ steps.build-app.outputs.suffix }}
           path: ${{ steps.build-app.outputs.fap-artifacts }}
