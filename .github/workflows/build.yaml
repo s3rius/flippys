@@ -1,7 +1,7 @@
 name: "FAP: Build"
 
 on:
-  push:
+  release:
 
 jobs:
   ufbt-build:
