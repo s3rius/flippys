@@ -1,0 +1,23 @@
+cargo-features = ["different-binary-name", "per-package-target"]
+
+[package]
+name = "btcon_client"
+version = "0.1.0"
+edition = "2021"
+autobins = false
+autoexamples = false
+autotests = false
+autobenches = false
+forced-target = "thumbv7em-none-eabihf"
+
+[[bin]]
+name = "btcon_client"
+filename = "btcon_client.fap"
+bench = false
+test = false
+
+[dependencies]
+flipperzero = { version = "0.15.0" }
+flipperzero-sys = { version = "0.15.0" }
+flipperzero-rt = { version = "0.15.0" }
+flipperzero-alloc = "0.15.0"
