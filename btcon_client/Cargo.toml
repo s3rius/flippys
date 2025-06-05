@@ -21,3 +21,4 @@ flipperzero = { version = "0.15.0" }
 flipperzero-sys = { version = "0.15.0" }
 flipperzero-rt = { version = "0.15.0" }
 flipperzero-alloc = "0.15.0"
+anyhow = { version = "1.0.98", default-features = false }
