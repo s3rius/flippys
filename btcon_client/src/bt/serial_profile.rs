@@ -1,23 +1,25 @@
-use core::ffi::{c_void, CStr};
+use core::ffi::{c_char, c_void, CStr};
 
 use flipperzero::info;
 use flipperzero_sys::{
     ble_svc_serial_set_callbacks, ble_svc_serial_start, ble_svc_serial_stop, bt_profile_start,
     furi::UnsafeRecord, furi_hal_version_get_ble_local_device_name_ptr,
-    furi_hal_version_get_ble_mac, furi_hal_version_get_hw_color, BleServiceSerial, Bt,
-    FuriHalBleProfileBase, FuriHalBleProfileParams, FuriHalBleProfileTemplate, GapConfig,
-    GapConfig__bindgen_ty_1, GapConnectionParamsRequest, GapPairingPinCodeVerifyYesNo,
-    SerialServiceEvent,
+    furi_hal_version_get_ble_mac, BleServiceSerial, Bt, FuriHalBleProfileBase,
+    FuriHalBleProfileParams, FuriHalBleProfileTemplate, GapConfig, GapConfig__bindgen_ty_1,
+    GapConnectionParamsRequest, GapPairingPinCodeVerifyYesNo, SerialServiceEvent,
 };
 
 use alloc::boxed::Box;
 
-use crate::{bt::BluetoothApp, utils::CallbackWrapper};
+use crate::{bt::callbacks, utils::CallbackWrapper};
 
 #[derive(Debug, Clone, Copy)]
 #[repr(C)]
 pub struct SerialProfileParams {
-    pub max_xor: u16,
+    pub adv_name: &'static str,
+    pub appearance_char: Option<u16>,
+    pub service_uuid: Option<u16>,
+    pub mac_xor: u16,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -37,10 +39,10 @@ const GAP_CONFIG: GapConfig = GapConfig {
     adv_name: [0; 18],
     adv_service: GapConfig__bindgen_ty_1 {
         UUID_Type: 0x01,
-        Service_UUID_16: 0x1800,
+        Service_UUID_16: 0x110A,
         Service_UUID_128: [0; 16],
     },
-    appearance_char: 0x0180,
+    appearance_char: 0x0040,
     mfg_data: [0; 23],
     mfg_data_len: 0,
     bonding_mode: true,
@@ -101,27 +103,31 @@ unsafe extern "C" fn get_gap_config(
             core::mem::size_of::<[u8; 6]>(),
         ));
     config.mac_address[2] += 1;
-    config.mac_address[0] ^= params_ref.max_xor as u8;
-    config.mac_address[1] ^= (params_ref.max_xor >> 8) as u8;
+    config.mac_address[0] ^= params_ref.mac_xor as u8;
+    config.mac_address[1] ^= (params_ref.mac_xor >> 8) as u8;
     info!("Setting mac address to: {:?}", config.mac_address);
 
     // Get neccesary name flags
     let device_name =
         CStr::from_ptr(furi_hal_version_get_ble_local_device_name_ptr()).to_bytes()[0];
     config.adv_name = [0; 18];
-    config.adv_name[0] = device_name;
-    info!("Device name: {:?}", device_name);
-    for (id, char) in b"Flip my shit".iter().enumerate() {
+    config.adv_name[0] = device_name as c_char; // Set the first character to the device name
+    for (id, char) in params_ref.adv_name.chars().enumerate() {
         let index = id + 1;
         if index < config.adv_name.len() {
-            config.adv_name[index] = *char;
+            config.adv_name[index] = char as c_char;
         } else {
             break; // Prevent overflow
         }
     }
-    let color = furi_hal_version_get_hw_color();
+    config.adv_name[config.adv_name.len() - 1] = 0x00; // Null-terminate the string
+    if let Some(appearance) = &params_ref.appearance_char {
+        config.appearance_char = *appearance;
+    }
     config.adv_service.UUID_Type = 0x01;
-    config.adv_service.Service_UUID_16 |= color.0 as u16;
+    if let Some(service_uuid) = &params_ref.service_uuid {
+        config.adv_service.Service_UUID_16 = *service_uuid;
+    }
 }
 
 pub unsafe fn setup_profile(
@@ -137,25 +143,19 @@ pub unsafe fn setup_profile(
 
 pub struct SerialProfile {
     profile_base: *mut FuriHalBleProfileBase,
-    bt: BluetoothApp,
     event_callback: Option<*mut c_void>,
 }
 
 impl SerialProfile {
-    pub fn new(bt: BluetoothApp, profile_base: *mut FuriHalBleProfileBase) -> Self {
+    pub fn new(profile_base: *mut FuriHalBleProfileBase) -> Self {
         SerialProfile {
             profile_base,
-            bt,
             event_callback: None,
         }
     }
 
     pub fn as_ptr(&self) -> *mut FuriHalBleProfileBase {
         self.profile_base
-    }
-
-    pub fn bt(&self) -> &BluetoothApp {
-        &self.bt
     }
 
     pub fn set_event_callback<'a, F, Ctx>(
@@ -167,22 +167,12 @@ impl SerialProfile {
     where
         F: FnMut(SerialServiceEvent, &mut Ctx) -> u16 + 'a,
     {
-        /// Trampoline function to call the callback with the correct signature
-        unsafe extern "C" fn trampoline_callback<'b, TF, TCtx>(
-            status: SerialServiceEvent,
-            data: *mut c_void,
-        ) -> u16
-        where
-            TF: FnMut(SerialServiceEvent, &mut TCtx) -> u16 + 'b,
-            TCtx: 'b,
-        {
-            let wrapper: &mut _ = unsafe { &mut *(data as *mut CallbackWrapper<'b, TF, TCtx>) };
-            (wrapper.callback)(status, &mut wrapper.context)
-        }
         // Get the previous callback to drop it later.
         let previous_cb = self.event_callback.take();
 
         let callback_wrapper = CallbackWrapper::new(&mut callback, ctx);
+        let wrapper_ptr = callback_wrapper as *mut _ as *mut c_void;
+        self.event_callback = Some(wrapper_ptr);
 
         unsafe {
             if self.profile_base.is_null() {
@@ -193,8 +183,8 @@ impl SerialProfile {
             ble_svc_serial_set_callbacks(
                 serial_svc,
                 buffer_size,
-                Some(trampoline_callback::<'a, F, Ctx>),
-                callback_wrapper as *mut _ as *mut c_void,
+                Some(callbacks::ble_svc_serial_callback::<'a, F, Ctx>),
+                wrapper_ptr,
             );
             if let Some(previous) = previous_cb {
                 if !previous.is_null() {
@@ -205,21 +195,21 @@ impl SerialProfile {
         Ok(())
     }
 
-    pub fn drop_event_callback<'a, F, Ctx: 'a>(&'a mut self)
-    where
-        F: FnMut(SerialServiceEvent, &'a mut Ctx) -> u16 + 'a,
-    {
-        if let Some(previous) = self.event_callback.take() {
-            unsafe {
-                let b = Box::from_raw(previous as *mut CallbackWrapper<'a, F, Ctx>);
-                drop(b)
+    pub fn drop_event_callback(&mut self) {
+        unsafe {
+            let serial_svc = (*(self.profile_base as *mut BlePorfileSerial)).serial_svc;
+            if !serial_svc.is_null() {
+                ble_svc_serial_set_callbacks(serial_svc, 0, None, core::ptr::null_mut());
             }
         }
+        if let Some(previous) = self.event_callback.take() {
+            drop(unsafe { Box::from_raw(previous) });
+        }
     }
+}
 
-    pub fn restore(self) -> BluetoothApp {
-        self.bt.disconnect();
-        self.bt.restore_profile();
-        self.bt
+impl Drop for SerialProfile {
+    fn drop(&mut self) {
+        self.drop_event_callback();
     }
 }
