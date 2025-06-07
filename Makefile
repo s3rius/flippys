@@ -1,3 +1,5 @@
+all: b u
+
 .PHONY: b
 b:
 	cargo build --release
