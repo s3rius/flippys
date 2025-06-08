@@ -1,6 +1,6 @@
 use core::ffi::{c_char, c_void, CStr};
 
-use flipperzero::info;
+use flipperzero::{furi::sync::Mutex, info};
 use flipperzero_sys::{
     ble_svc_serial_set_callbacks, ble_svc_serial_start, ble_svc_serial_stop, bt_profile_start,
     furi::UnsafeRecord, furi_hal_version_get_ble_local_device_name_ptr,
@@ -143,14 +143,14 @@ pub unsafe fn setup_profile(
 
 pub struct SerialProfile {
     profile_base: *mut FuriHalBleProfileBase,
-    event_callback: Option<*mut c_void>,
+    event_callback: Mutex<Option<*mut c_void>>,
 }
 
 impl SerialProfile {
     pub fn new(profile_base: *mut FuriHalBleProfileBase) -> Self {
         SerialProfile {
             profile_base,
-            event_callback: None,
+            event_callback: Mutex::new(None),
         }
     }
 
@@ -168,11 +168,12 @@ impl SerialProfile {
         F: FnMut(SerialServiceEvent, &mut Ctx) -> u16 + 'a,
     {
         // Get the previous callback to drop it later.
-        let previous_cb = self.event_callback.take();
+        self.drop_event_callback();
 
         let callback_wrapper = CallbackWrapper::new(&mut callback, ctx);
         let wrapper_ptr = callback_wrapper as *mut _ as *mut c_void;
-        self.event_callback = Some(wrapper_ptr);
+        let mut callback_guard = self.event_callback.lock();
+        *callback_guard = Some(wrapper_ptr);
 
         unsafe {
             if self.profile_base.is_null() {
@@ -186,23 +187,19 @@ impl SerialProfile {
                 Some(callbacks::ble_svc_serial_callback::<'a, F, Ctx>),
                 wrapper_ptr,
             );
-            if let Some(previous) = previous_cb {
-                if !previous.is_null() {
-                    core::ptr::drop_in_place(previous as *mut CallbackWrapper<'a, F, Ctx>);
-                }
-            }
         }
         Ok(())
     }
 
     pub fn drop_event_callback(&mut self) {
+        let mut callback_guard = self.event_callback.lock();
         unsafe {
             let serial_svc = (*(self.profile_base as *mut BlePorfileSerial)).serial_svc;
             if !serial_svc.is_null() {
                 ble_svc_serial_set_callbacks(serial_svc, 0, None, core::ptr::null_mut());
             }
         }
-        if let Some(previous) = self.event_callback.take() {
+        if let Some(previous) = callback_guard.take() {
             drop(unsafe { Box::from_raw(previous) });
         }
     }

@@ -4,7 +4,13 @@ use core::{
 };
 
 use alloc::boxed::Box;
-use flipperzero::{furi::thread::sleep, info};
+use flipperzero::{
+    furi::{
+        sync::{FuriMutex, Mutex},
+        thread::sleep,
+    },
+    info,
+};
 use flipperzero_sys::{
     bt_disconnect, bt_forget_bonded_devices, bt_profile_restore_default,
     bt_set_status_changed_callback, furi::UnsafeRecord, furi_hal_bt_start_advertising,
@@ -17,7 +23,7 @@ use super::serial_profile::{self, SerialProfileParams};
 
 pub struct BluetoothApp {
     record: UnsafeRecord<Bt>,
-    event_callback: Option<*mut c_void>,
+    event_callback: Mutex<Option<*mut c_void>>,
 }
 
 impl BluetoothApp {
@@ -26,7 +32,7 @@ impl BluetoothApp {
     pub fn open() -> Self {
         BluetoothApp {
             record: unsafe { UnsafeRecord::open(Self::NAME) },
-            event_callback: None,
+            event_callback: Mutex::new(None),
         }
     }
 
@@ -59,7 +65,7 @@ impl BluetoothApp {
     }
 
     pub fn set_status_change_callback<'a, F, Ctx>(
-        &mut self,
+        &self,
         mut callback: F,
         ctx: &'a mut Ctx,
     ) -> anyhow::Result<()>
@@ -69,7 +75,8 @@ impl BluetoothApp {
         // Get the previous callback to drop it later.
         let callback_wrapper = crate::utils::CallbackWrapper::new(&mut callback, ctx);
         let wrapper_ptr = callback_wrapper as *mut _ as *mut c_void;
-        self.event_callback = Some(wrapper_ptr);
+        let mut callback_guard = self.event_callback.lock();
+        *callback_guard = Some(wrapper_ptr);
         unsafe {
             if self.as_ptr().is_null() {
                 info!("Profile base is null, cannot set event callback");
@@ -84,8 +91,9 @@ impl BluetoothApp {
         Ok(())
     }
 
-    pub fn drop_event_callback(&mut self) {
-        if let Some(callback_ptr) = self.event_callback.take() {
+    pub fn drop_event_callback(&self) {
+        let mut callback_guard = self.event_callback.lock();
+        if let Some(callback_ptr) = callback_guard.take() {
             drop(unsafe { Box::from_raw(callback_ptr) })
         }
         unsafe {
