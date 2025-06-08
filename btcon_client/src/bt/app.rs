@@ -6,7 +6,7 @@ use core::{
 use alloc::boxed::Box;
 use flipperzero::{
     furi::{
-        sync::{FuriMutex, Mutex},
+        sync::Mutex,
         thread::sleep,
     },
     info,

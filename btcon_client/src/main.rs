@@ -8,12 +8,10 @@ extern crate alloc;
 extern crate flipperzero_alloc;
 use alloc::string::ToString;
 use flipperzero::{error, furi::string::FuriString, info};
-use flipperzero_sys::FuriEventLoop;
 
 use core::{ffi::CStr, time::Duration};
 
-use bt::BluetoothApp;
-use flipperzero::{furi::thread::sleep, notification::NotificationApp};
+use flipperzero::furi::thread::sleep;
 use flipperzero_rt::{entry, manifest};
 
 use crate::{app::BtconnApp, bt::serial_profile::SerialProfileParams};
@@ -36,7 +34,7 @@ manifest!(
 entry!(main);
 
 fn real_main() -> anyhow::Result<()> {
-    let mut app = BtconnApp::new();
+    let app = BtconnApp::new();
     let mut profile = app.bt.serial_profile_start(SerialProfileParams {
         adv_name: "Little btcon",
         appearance_char: Some(0x0040),
