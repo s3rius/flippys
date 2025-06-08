@@ -5,10 +5,7 @@ use core::{
 
 use alloc::boxed::Box;
 use flipperzero::{
-    furi::{
-        sync::Mutex,
-        thread::sleep,
-    },
+    furi::{sync::Mutex, thread::sleep},
     info,
 };
 use flipperzero_sys::{
@@ -64,16 +61,12 @@ impl BluetoothApp {
         SerialProfile::new(profile_base)
     }
 
-    pub fn set_status_change_callback<'a, F, Ctx>(
-        &self,
-        mut callback: F,
-        ctx: &'a mut Ctx,
-    ) -> anyhow::Result<()>
+    pub fn set_status_change_callback<F>(&self, mut callback: F) -> anyhow::Result<()>
     where
-        F: FnMut(flipperzero_sys::BtStatus, &'a mut Ctx) + 'a,
+        F: FnMut(flipperzero_sys::BtStatus),
     {
         // Get the previous callback to drop it later.
-        let callback_wrapper = crate::utils::CallbackWrapper::new(&mut callback, ctx);
+        let callback_wrapper = crate::utils::CallbackWrapper::new(&mut callback);
         let wrapper_ptr = callback_wrapper as *mut _ as *mut c_void;
         let mut callback_guard = self.event_callback.lock();
         *callback_guard = Some(wrapper_ptr);
@@ -84,7 +77,7 @@ impl BluetoothApp {
             }
             bt_set_status_changed_callback(
                 self.as_ptr(),
-                Some(bt_status_changed_callback::<'a, F, Ctx>),
+                Some(bt_status_changed_callback::<F>),
                 wrapper_ptr,
             )
         }

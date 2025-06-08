@@ -1,15 +1,14 @@
 use alloc::boxed::Box;
 
 #[allow(dead_code)]
-pub struct CallbackWrapper<'a, F, Ctx> {
+pub struct CallbackWrapper<'a, F> {
     pub callback: &'a mut F,
-    pub context: &'a mut Ctx,
 }
 
-impl<'a, F, Ctx> CallbackWrapper<'a, F, Ctx> {
+impl<'a, F> CallbackWrapper<'a, F> {
     #[allow(unused)]
-    pub fn new(callback: &'a mut F, context: &'a mut Ctx) -> *mut Self {
-        let boxed = Box::new(CallbackWrapper { callback, context });
+    pub fn new(callback: &'a mut F) -> *mut Self {
+        let boxed = Box::new(CallbackWrapper { callback });
         Box::into_raw(boxed)
     }
 }

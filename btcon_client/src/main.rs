@@ -44,52 +44,45 @@ fn real_main() -> anyhow::Result<()> {
 
     profile.drop_event_callback();
     app.bt.start_advertising();
-    app.bt.set_status_change_callback(
-        |status, _ctx| {
-            match status {
-                flipperzero_sys::BtStatusOff => {
-                    info!("BT is off NOW");
-                    // Handle Bluetooth connected event
-                }
-                flipperzero_sys::BtStatusAdvertising => {
-                    info!("BT is advertising");
-                    // Handle Bluetooth disconnected event
-                }
-                flipperzero_sys::BtStatusConnected => {
-                    info!("BT is connected");
-                    // Handle Bluetooth connected event
-                }
-                flipperzero_sys::BtStatusUnavailable => {
-                    info!("BT is unavailable");
-                    // Handle Bluetooth unavailable event
-                }
-                _ => {}
+    app.bt.set_status_change_callback(move |status| {
+        match status {
+            flipperzero_sys::BtStatusOff => {
+                info!("BT is off NOW");
+                // Handle Bluetooth connected event
             }
-        },
-        &mut 0,
-    )?;
-    profile.set_event_callback(
-        128,
-        |status, _ctx| {
-            match status.event {
-                flipperzero_sys::SerialServiceEventTypeDataSent => {
-                    info!("Sent {} bytes of data", status.data.size);
-                    // Handle sent data here
-                }
-                flipperzero_sys::SerialServiceEventTypeDataReceived => {
-                    info!("Received {} bytes of data", status.data.size);
-                    // Handle received data here
-                }
-                _ => {
-                    unreachable!();
-                }
+            flipperzero_sys::BtStatusAdvertising => {
+                info!("BT is advertising");
+                // Handle Bluetooth disconnected event
             }
-            return 0;
-        },
-        &mut 0,
-    )?;
+            flipperzero_sys::BtStatusConnected => {
+                info!("BT is connected");
+                // Handle Bluetooth connected event
+            }
+            flipperzero_sys::BtStatusUnavailable => {
+                info!("BT is unavailable");
+                // Handle Bluetooth unavailable event
+            }
+            _ => {}
+        }
+    })?;
+    profile.set_event_callback(128, |status| {
+        match status.event {
+            flipperzero_sys::SerialServiceEventTypeDataSent => {
+                info!("Sent {} bytes of data", status.data.size);
+                // Handle sent data here
+            }
+            flipperzero_sys::SerialServiceEventTypeDataReceived => {
+                info!("Received {} bytes of data", status.data.size);
+                // Handle received data here
+            }
+            _ => {
+                unreachable!();
+            }
+        }
+        return 0;
+    })?;
 
-    sleep(Duration::from_secs(1));
+    sleep(Duration::from_secs(30));
 
     Ok(())
 }

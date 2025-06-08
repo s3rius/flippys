@@ -2,11 +2,13 @@ use core::ffi::{c_char, c_void, CStr};
 
 use flipperzero::{furi::sync::Mutex, info};
 use flipperzero_sys::{
+    ble_svc_battery_start, ble_svc_battery_stop, ble_svc_dev_info_start, ble_svc_dev_info_stop,
     ble_svc_serial_set_callbacks, ble_svc_serial_start, ble_svc_serial_stop, bt_profile_start,
     furi::UnsafeRecord, furi_hal_version_get_ble_local_device_name_ptr,
-    furi_hal_version_get_ble_mac, BleServiceSerial, Bt, FuriHalBleProfileBase,
-    FuriHalBleProfileParams, FuriHalBleProfileTemplate, GapConfig, GapConfig__bindgen_ty_1,
-    GapConnectionParamsRequest, GapPairingPinCodeVerifyYesNo, SerialServiceEvent,
+    furi_hal_version_get_ble_mac, BleServiceBattery, BleServiceDevInfo, BleServiceSerial, Bt,
+    FuriHalBleProfileBase, FuriHalBleProfileParams, FuriHalBleProfileTemplate, GapConfig,
+    GapConfig__bindgen_ty_1, GapConnectionParamsRequest, GapPairingPinCodeVerifyYesNo,
+    SerialServiceEvent,
 };
 
 use alloc::boxed::Box;
@@ -26,6 +28,8 @@ pub struct SerialProfileParams {
 #[repr(C)]
 pub struct BlePorfileSerial {
     pub base: FuriHalBleProfileBase,
+    pub dev_info_svc: *mut BleServiceDevInfo,
+    pub battery_svc: *mut BleServiceBattery,
     pub serial_svc: *mut BleServiceSerial,
 }
 
@@ -62,6 +66,8 @@ unsafe extern "C" fn start_profile(_: FuriHalBleProfileParams) -> *mut FuriHalBl
         base: FuriHalBleProfileBase {
             config: &PROFILE_BASE_CONFIG,
         },
+        dev_info_svc: ble_svc_dev_info_start(),
+        battery_svc: ble_svc_battery_start(true),
         serial_svc: ble_svc_serial_start(),
     });
 
@@ -82,6 +88,8 @@ unsafe extern "C" fn stop_profile(prof: *mut FuriHalBleProfileBase) {
     // Since we have leaked a box, we need to ensure we don't double free it.
     let profile = &mut *(prof as *mut BlePorfileSerial);
     ble_svc_serial_stop(profile.serial_svc);
+    ble_svc_dev_info_stop(profile.dev_info_svc);
+    ble_svc_battery_stop(profile.battery_svc);
 }
 
 #[no_mangle]
@@ -158,19 +166,18 @@ impl SerialProfile {
         self.profile_base
     }
 
-    pub fn set_event_callback<'a, F, Ctx>(
+    pub fn set_event_callback<F>(
         &mut self,
         buffer_size: u16,
         mut callback: F,
-        ctx: &'a mut Ctx,
     ) -> anyhow::Result<()>
     where
-        F: FnMut(SerialServiceEvent, &mut Ctx) -> u16 + 'a,
+        F: FnMut(SerialServiceEvent) -> u16,
     {
         // Get the previous callback to drop it later.
         self.drop_event_callback();
 
-        let callback_wrapper = CallbackWrapper::new(&mut callback, ctx);
+        let callback_wrapper = CallbackWrapper::new(&mut callback);
         let wrapper_ptr = callback_wrapper as *mut _ as *mut c_void;
         let mut callback_guard = self.event_callback.lock();
         *callback_guard = Some(wrapper_ptr);
@@ -184,7 +191,7 @@ impl SerialProfile {
             ble_svc_serial_set_callbacks(
                 serial_svc,
                 buffer_size,
-                Some(callbacks::ble_svc_serial_callback::<'a, F, Ctx>),
+                Some(callbacks::ble_svc_serial_callback::<F>),
                 wrapper_ptr,
             );
         }
