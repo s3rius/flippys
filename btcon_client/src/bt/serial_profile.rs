@@ -166,11 +166,7 @@ impl SerialProfile {
         self.profile_base
     }
 
-    pub fn set_event_callback<F>(
-        &mut self,
-        buffer_size: u16,
-        mut callback: F,
-    ) -> anyhow::Result<()>
+    pub fn set_event_callback<F>(&mut self, buffer_size: u16, mut callback: F) -> anyhow::Result<()>
     where
         F: FnMut(SerialServiceEvent) -> u16,
     {
